@@ -48,9 +48,10 @@ const RUDE_PATTERNS = [
 // ─── Safe-list: pesan yang PASTI aman, skip semua cek ───────
 const SAFE_PATTERNS = [
   /^[\d\s\+\-\.\,\!\?]+$/,            // Hanya angka/simbol
-  /^(ok|oke|iya|ya|sip|siap|makasih|thanks|noted|done|haha|hehe|wkwk|😊|👍|🙏)+$/i,
+  /^(ok|oke|iya|ya|sip|siap|makasih|thanks|noted|done|haha|hehe|wkwk|😊|👍|🙏|lancar|jaya|aman|semangat)+$/i,
   /^https?:\/\//i,                     // URL saja
   /^\s*$/,                             // Kosong
+  /^[A-Z0-9]{5,}$/,                    // Kode/ID (huruf besar/angka saja)
 ];
 
 /**
@@ -167,9 +168,11 @@ async function checkViolation(messageText) {
             role: 'system',
             // Prompt sesingkat mungkin untuk hemat input token
             content:
-              'Moderasi WA Indonesia. Cek: rude(kata kasar/makian), racist(rasis), sara(SARA). ' +
-              'Konteks normal/olahraga/berita bukan pelanggaran. ' +
-              'Jawab JSON saja: {"is_violation":bool,"category":"rude|racist|sara|none","confidence":0.0-1.0}'
+              'Anda adalah moderator grup WhatsApp Indonesia yang sangat ketat dan akurat. ' +
+              'Tugas: Identifikasi (rude/racist/sara). ' +
+              'PENTING: Jangan beri peringatan untuk bahasa gaul santai, candaan olahraga, atau berita. ' +
+              'Hanya beri is_violation:true jika pesan benar-benar menghina, merendahkan, atau memaki seseorang. ' +
+              'Jawab JSON: {"is_violation":bool,"category":"rude|racist|sara|none","confidence":0.0-1.0,"reason":"singkat"}'
           },
           {
             role: 'user',

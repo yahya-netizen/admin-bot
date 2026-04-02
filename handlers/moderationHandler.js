@@ -9,7 +9,8 @@ const {
   loadWarnings,
   addWarning,
   resetWarning,
-  getWarningCount
+  getWarningCount,
+  loadStatus
 } = require('../utils/storage');
 
 // In-memory warnings (dimuat dari file saat startup)
@@ -27,6 +28,10 @@ const CATEGORY_INFO = {
  */
 async function handleMessage(client, message) {
   try {
+    // ── Check Bot Status ─────────────────────────────────────
+    const { isActive } = loadStatus();
+    if (!isActive) return;
+
     // Hanya proses pesan grup
     const chat = await message.getChat();
     if (!chat.isGroup) return;
@@ -136,6 +141,13 @@ function resetMemberWarnings(groupId, userId) {
 
 /**
  * Ambil jumlah peringatan member tertentu
+ */
+function getMemberWarnings(groupId, userId) {
+  return getWarningCount(warnings, groupId, userId);
+}
+
+module.exports = { handleMessage, resetMemberWarnings, getMemberWarnings };
+mber tertentu
  */
 function getMemberWarnings(groupId, userId) {
   return getWarningCount(warnings, groupId, userId);

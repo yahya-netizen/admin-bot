@@ -13,10 +13,11 @@ const config             = require('./config');
 const { handleNewMember }       = require('./handlers/welcomeHandler');
 const { handleMessage, resetMemberWarnings, getMemberWarnings } = require('./handlers/moderationHandler');
 const { startPrayerScheduler }  = require('./handlers/prayerHandler');
+const { loadStatus, saveStatus } = require('./utils/storage');
 const { getUsageStats }         = require('./utils/grokAI');
 
 // ─── Daftar grup yang dikelola bot ─────────────────────────
-let managedGroups = [];
+let managedGroups = ['MAHASISWA MUSLIM UNSIL 2026','es bot' ];
 
 const getGroups = () => managedGroups;
 
@@ -168,6 +169,30 @@ client.on('group_leave', async (notification) => {
 // ─── Event: Pesan Masuk ──────────────────────────────────────
 client.on('message', async (message) => {
   const senderId = message.author || message.from;
+  const body = (message.body || '').trim().toLowerCase();
+  const isOwner = senderId === config.OWNER_NUMBER + '@c.us';
+
+  // ── Perintah bot-bangun & bot-tidur (Grup/DM) ──────────────
+  if (body === 'bot-bangun' || body === 'bot-tidur') {
+    let canToggle = isOwner;
+
+    // Jika di grup, admin juga bisa toggle
+    if (message.isGroupMsg || (await message.getChat()).isGroup) {
+      const chat = await message.getChat();
+      const participant = chat.participants?.find(p => p.id._serialized === senderId);
+      if (participant?.isAdmin) canToggle = true;
+    }
+
+    if (canToggle) {
+      const isActivating = body === 'bot-bangun';
+      saveStatus(isActivating);
+      const statusMsg = isActivating
+        ? '☀️ *Bot Bangun!* Bot kembali aktif memantau grup. 🤖✅'
+        : '🌙 *Bot Tidur.* Bot dinonaktifkan sementara. 🤖💤';
+      await message.reply(statusMsg);
+      return;
+    }
+  }
 
   // ── Perintah Owner (DM langsung ke bot) ─────────────────
   if (message.from === config.OWNER_NUMBER + '@c.us' && !message.isGroupMsg) {

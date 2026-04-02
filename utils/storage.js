@@ -68,4 +68,27 @@ function getWarningCount(warnings, groupId, userId) {
   return (warnings[groupId] && warnings[groupId][userId]) || 0;
 }
 
+module.exports = {
+  loadWarnings,
+  saveWarnings,
+  addWarning,
+  resetWarning,
+  getWarningCount,
+  loadStatus,
+  saveStatus
+};
+unction resetWarning(warnings, groupId, userId) {
+  if (warnings[groupId] && warnings[groupId][userId] !== undefined) {
+    delete warnings[groupId][userId];
+    saveWarnings(warnings);
+  }
+}
+
+/**
+ * Ambil jumlah peringatan user di grup tertentu
+ */
+function getWarningCount(warnings, groupId, userId) {
+  return (warnings[groupId] && warnings[groupId][userId]) || 0;
+}
+
 module.exports = { loadWarnings, saveWarnings, addWarning, resetWarning, getWarningCount };
