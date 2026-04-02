@@ -95,10 +95,12 @@ async function startPrayerScheduler(client, getGroups) {
           const chat = await client.getChatById(groupId);
 
           const reminderMsg = `
-🔔 *Pengingat Shalat ${info.name}* 🔔
+🕌 *Grup Dikunci Sementara — Waktu Shalat ${info.name}* 🕌
 
-Dalam *${config.BEFORE_PRAYER} menit* lagi, waktu shalat *${info.name}* akan tiba.
-Grup dikunci sementara untuk menghormati waktu ibadah. 🙏
+Panggilan ibadah untuk shalat *${info.name}* akan segera tiba (sekitar *${config.BEFORE_PRAYER} menit* lagi).
+Grup kami *kunci sementara* agar seluruh anggota dapat fokus menjalankan ibadah dengan tenang. 🙏
+
+Grup akan dibuka kembali sekitar *10 menit* setelah adzan berkumandang.
 
 *— ${config.BOT_NAME}*
 `.trim();
@@ -156,10 +158,12 @@ Semoga ibadah kita diterima Allah SWT. Aamiin 🤲
           await chat.setMessagesAdminsOnly(false);
 
           const openMsg = `
-✅ *Grup dibuka kembali.*
+✅ *Grup Dibuka Kembali — Selesai Ibadah* ✅
 
-Semoga shalat ${info.name} kita semua diterima Allah SWT. Aamiin 🤲
-Silakan lanjutkan aktivitas dengan penuh semangat!
+Waktu ibadah shalat *${info.name}* telah selesai. Grup kini telah *dibuka kembali* untuk umum.
+Semoga amal ibadah kita semua diterima oleh Allah SWT. Aamiin 🤲
+
+Silakan lanjutkan aktivitas diskusi Anda. Terima kasih! 😊
 
 *— ${config.BOT_NAME}*
 `.trim();

@@ -1,5 +1,5 @@
 // =============================================================
-// utils/storage.js — Penyimpanan data peringatan (warnings)
+// utils/storage.js — Penyimpanan data peringatan & status bot
 // =============================================================
 
 const fs   = require('fs');
@@ -7,6 +7,7 @@ const path = require('path');
 
 const DATA_DIR      = path.join(__dirname, '..', 'data');
 const WARNINGS_FILE = path.join(DATA_DIR, 'warnings.json');
+const STATUS_FILE   = path.join(DATA_DIR, 'status.json');
 
 /** Pastikan direktori data tersedia */
 function ensureDataDir() {
@@ -16,8 +17,28 @@ function ensureDataDir() {
 }
 
 /**
+ * Muat status aktif bot (default: true)
+ */
+function loadStatus() {
+  ensureDataDir();
+  if (!fs.existsSync(STATUS_FILE)) return { isActive: true };
+  try {
+    return JSON.parse(fs.readFileSync(STATUS_FILE, 'utf8'));
+  } catch {
+    return { isActive: true };
+  }
+}
+
+/**
+ * Simpan status aktif bot
+ */
+function saveStatus(isActive) {
+  ensureDataDir();
+  fs.writeFileSync(STATUS_FILE, JSON.stringify({ isActive }, null, 2), 'utf8');
+}
+
+/**
  * Muat data warnings dari file JSON
- * @returns {{ [groupId: string]: { [userId: string]: number } }}
  */
 function loadWarnings() {
   ensureDataDir();
@@ -32,7 +53,6 @@ function loadWarnings() {
 
 /**
  * Simpan data warnings ke file JSON
- * @param {object} warnings
  */
 function saveWarnings(warnings) {
   ensureDataDir();
@@ -41,7 +61,6 @@ function saveWarnings(warnings) {
 
 /**
  * Tambah 1 peringatan untuk user di grup tertentu
- * @returns {number} jumlah peringatan setelah penambahan
  */
 function addWarning(warnings, groupId, userId) {
   if (!warnings[groupId])         warnings[groupId] = {};
@@ -77,18 +96,3 @@ module.exports = {
   loadStatus,
   saveStatus
 };
-unction resetWarning(warnings, groupId, userId) {
-  if (warnings[groupId] && warnings[groupId][userId] !== undefined) {
-    delete warnings[groupId][userId];
-    saveWarnings(warnings);
-  }
-}
-
-/**
- * Ambil jumlah peringatan user di grup tertentu
- */
-function getWarningCount(warnings, groupId, userId) {
-  return (warnings[groupId] && warnings[groupId][userId]) || 0;
-}
-
-module.exports = { loadWarnings, saveWarnings, addWarning, resetWarning, getWarningCount };

@@ -34,9 +34,9 @@ module.exports = {
   GROUP_DESCRIPTION: `
 🛡️ *SELAMAT DATANG DI GRUP KAMI!*
 
-Grup ini adalah komunitas yang aman, nyaman, dan saling menghormati.
+Grup ini adalah komunitas mahasiswa muslim yang akan membantu temen-temen maba beradaptasi di kampus.
 Kami menjunjung tinggi nilai-nilai kesopanan, toleransi, dan kebersamaan
-dalam bingkai keberagaman Indonesia. 🇮🇩
+dalam bingkai keberagaman Indonesia,, enjoy guys.🇮🇩
 `.trim(),
 
   GROUP_RULES: `
@@ -45,7 +45,7 @@ dalam bingkai keberagaman Indonesia. 🇮🇩
 1️⃣  Dilarang berkata kasar, makian, atau tidak sopan
 2️⃣  Dilarang menyebarkan konten *RASIS*
 3️⃣  Dilarang menyebarkan konten *SARA* (Suku, Agama, Ras, Antar-golongan)
-4️⃣  Dilarang spam dan promosi/iklan tanpa izin admin
+4️⃣  Dilarang spam dan promosi/iklan tanpa izin admin (antisipasi scam)
 5️⃣  Dilarang menyebarkan hoaks dan berita bohong
 6️⃣  Saling menghormati sesama anggota
 7️⃣  Grup akan *dikunci* saat waktu shalat dan di luar jam operasional

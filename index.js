@@ -81,6 +81,9 @@ client.on('ready', async () => {
   // Jalankan scheduler jam operasional grup
   startGroupOperationalScheduler();
 
+  // Cek jam operasional sekarang (antisipasi bot baru nyala di jam tidur)
+  await checkCurrentOperationalHours();
+
   // Kirim notifikasi ke owner bahwa bot aktif
   try {
     await client.sendMessage(
@@ -105,7 +108,10 @@ function startGroupOperationalScheduler() {
         const chat = await client.getChatById(groupId);
         await chat.setMessagesAdminsOnly(false);
         await chat.sendMessage(
-          `🌅 *Selamat Pagi!*\n\nGrup kini dibuka kembali. Selamat beraktivitas dan semangat pagi! ☀️\n\n*— ${config.BOT_NAME}*`
+          `🌅 *SELAMAT PAGI! — GRUP DIBUKA* ☀️\n\n` +
+          `Waktu menunjukkan pukul 03.00 WIB. Sesuai jadwal operasional, grup kini telah *dibuka kembali*.\n\n` +
+          `Selamat beraktivitas, tetap jaga kesopanan dan semangat pagi! 💪😊\n\n` +
+          `*— ${config.BOT_NAME}*`
         );
       } catch (e) {
         console.error('[Scheduler] Gagal buka grup:', e.message);
@@ -120,7 +126,10 @@ function startGroupOperationalScheduler() {
       try {
         const chat = await client.getChatById(groupId);
         await chat.sendMessage(
-          `🌙 *Selamat Istirahat!*\n\nGrup ditutup mulai pukul 22.00 WIB.\nSampai jumpa besok pagi pukul 03.00 WIB. 👋\n\n*— ${config.BOT_NAME}*`
+          `🌙 *SELAMAT ISTIRAHAT — GRUP DITUTUP* 💤\n\n` +
+          `Waktu menunjukkan pukul 22.00 WIB. Sesuai jadwal operasional, grup kini kami *tutup sementara* untuk waktu istirahat.\n\n` +
+          `Grup akan dibuka kembali besok pagi pukul 03.00 WIB. Sampai jumpa besok! 👋😴\n\n` +
+          `*— ${config.BOT_NAME}*`
         );
         await chat.setMessagesAdminsOnly(true);
       } catch (e) {
@@ -138,6 +147,29 @@ function startGroupOperationalScheduler() {
   console.log('[Scheduler] Jam operasional & refresh jadwal aktif.\n');
 }
 
+/**
+ * Cek apakah jam sekarang masuk jam tidur grup
+ */
+async function checkCurrentOperationalHours() {
+  const now   = new Date();
+  const hour  = now.getHours();
+  
+  // Jika jam sekarang >= 22 ATAU jam < 3 (Waktu Tidur)
+  if (hour >= config.CLOSE_HOUR || hour < config.OPEN_HOUR) {
+    console.log(`[Operational] Jam sekarang ${hour}:00, otomatis mengunci grup (Waktu Tidur).`);
+    for (const groupId of managedGroups) {
+      try {
+        const chat = await client.getChatById(groupId);
+        await chat.setMessagesAdminsOnly(true);
+      } catch (e) {
+        console.error(`[Operational] Gagal kunci grup ${groupId}:`, e.message);
+      }
+    }
+  } else {
+    console.log(`[Operational] Jam sekarang ${hour}:00, masuk jam operasional.`);
+  }
+}
+
 // ─── Event: Anggota Baru Masuk ───────────────────────────────
 client.on('group_join', async (notification) => {
   const ids = notification.recipientIds || [];
@@ -151,7 +183,7 @@ client.on('group_join', async (notification) => {
     }
   }
 
-  // Sambut anggota baru (bukan bot)
+  // Sambut anggota baru (fitur ini tetap jalan meskipun moderasi mati)
   await handleNewMember(client, notification);
 });
 
@@ -169,16 +201,16 @@ client.on('group_leave', async (notification) => {
 // ─── Event: Pesan Masuk ──────────────────────────────────────
 client.on('message', async (message) => {
   const senderId = message.author || message.from;
-  const body = (message.body || '').trim().toLowerCase();
-  const isOwner = senderId === config.OWNER_NUMBER + '@c.us';
+  const body     = (message.body || '').trim().toLowerCase();
+  const isOwner  = senderId === config.OWNER_NUMBER + '@c.us';
 
   // ── Perintah bot-bangun & bot-tidur (Grup/DM) ──────────────
   if (body === 'bot-bangun' || body === 'bot-tidur') {
     let canToggle = isOwner;
 
-    // Jika di grup, admin juga bisa toggle
-    if (message.isGroupMsg || (await message.getChat()).isGroup) {
-      const chat = await message.getChat();
+    // Jika di grup, cek apakah pengirim adalah admin
+    const chat = await message.getChat();
+    if (chat.isGroup) {
       const participant = chat.participants?.find(p => p.id._serialized === senderId);
       if (participant?.isAdmin) canToggle = true;
     }
@@ -195,13 +227,14 @@ client.on('message', async (message) => {
   }
 
   // ── Perintah Owner (DM langsung ke bot) ─────────────────
-  if (message.from === config.OWNER_NUMBER + '@c.us' && !message.isGroupMsg) {
+  if (senderId === config.OWNER_NUMBER + '@c.us' && !message.isGroupMsg && !message.from.endsWith('@g.us')) {
     await handleOwnerCommand(message);
     return;
   }
 
   // ── Moderasi Pesan Grup ──────────────────────────────────
-  if (message.isGroupMsg || (await message.getChat()).isGroup) {
+  const chat = await message.getChat();
+  if (chat.isGroup) {
     await handleMessage(client, message);
   }
 });
@@ -214,6 +247,8 @@ async function handleOwnerCommand(message) {
   if (lower === '!help') {
     await message.reply(
       `📋 *Daftar Perintah ${config.BOT_NAME}*\n\n` +
+      `*bot-bangun*           — Aktifkan moderasi bot\n` +
+      `*bot-tidur*            — Nonaktifkan moderasi bot\n` +
       `*!status*               — Lihat status bot & grup\n` +
       `*!apistats*             — Pantau penggunaan Grok AI hari ini\n` +
       `*!groups*               — Daftar grup yang dikelola\n` +
@@ -227,10 +262,12 @@ async function handleOwnerCommand(message) {
   }
 
   if (lower === '!status') {
+    const { isActive } = loadStatus();
     await message.reply(
       `✅ *${config.BOT_NAME} Status*\n\n` +
       `🕐 Waktu   : ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}\n` +
       `📊 Grup    : ${managedGroups.length}\n` +
+      `🤖 Moderasi: ${isActive ? 'Aktif (Bangun) ✅' : 'Mati (Tidur) 💤'}\n` +
       `🤖 Versi   : 1.0.0`
     );
     return;
