@@ -161,6 +161,14 @@ async function checkCurrentOperationalHours() {
       try {
         const chat = await client.getChatById(groupId);
         await chat.setMessagesAdminsOnly(true);
+        
+        // Kirim keterangan agar anggota tahu kenapa grup terkunci
+        await chat.sendMessage(
+          `🌙 *INFO OTOMATIS — GRUP TETAP DITUTUP* 💤\n\n` +
+          `Bot baru saja aktif. Karena saat ini sudah memasuki waktu istirahat (pukul ${hour}.00 WIB), maka grup *tetap dikunci* sesuai jadwal operasional.\n\n` +
+          `Grup akan dibuka kembali besok pagi pukul 03.00 WIB. Selamat beristirahat! 😴\n\n` +
+          `*— ${config.BOT_NAME}*`
+        );
       } catch (e) {
         console.error(`[Operational] Gagal kunci grup ${groupId}:`, e.message);
       }

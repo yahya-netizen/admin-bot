@@ -49,6 +49,7 @@ const RUDE_PATTERNS = [
 const SAFE_PATTERNS = [
   /^[\d\s\+\-\.\,\!\?]+$/,            // Hanya angka/simbol
   /^(ok|oke|iya|ya|sip|siap|makasih|thanks|noted|done|haha|hehe|wkwk|😊|👍|🙏|lancar|jaya|aman|semangat)+$/i,
+  /^(bot-bangun|bot-tidur|!status|!help|!apistats)$/i, // Perintah bot
   /^https?:\/\//i,                     // URL saja
   /^\s*$/,                             // Kosong
   /^[A-Z0-9]{5,}$/,                    // Kode/ID (huruf besar/angka saja)
@@ -159,8 +160,8 @@ async function checkViolation(messageText) {
     const response = await axios.post(
       GROK_API_URL,
       {
-        // grok-3-mini = model paling murah xAI (free tier friendly)
-        model:      'grok-3-mini',
+        // grok-beta = model stabil xAI
+        model:      'grok-beta',
         max_tokens: 60,        // JSON pendek cukup {"is_violation":x,"category":"x","confidence":x}
         temperature: 0,        // Deterministik = konsisten + hemat
         messages: [
