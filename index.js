@@ -22,7 +22,20 @@ let managedGroups = ['MAHASISWA MUSLIM UNSIL 2026','es bot' ];
 const getGroups = () => managedGroups;
 
 // ─── Inisialisasi Client WhatsApp ───────────────────────────
+//untuk termux server
 const client = new Client({
+    puppeteer: {
+        executablePath: '/data/data/com.termux/files/usr/bin/chromium-browser',
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox'
+        ]
+    }
+    // (Jika ada pengaturan lain sebelumnya seperti authStrategy, biarkan saja)
+});
+
+//untuk vps
+/*const client = new Client({
   authStrategy: new LocalAuth({ clientId: 'safety-bot' }),
   puppeteer: {
     headless: true,
@@ -37,7 +50,7 @@ const client = new Client({
       '--disable-gpu'
     ]
   }
-});
+});*/
 
 // ─── QR Code ────────────────────────────────────────────────
 client.on('qr', (qr) => {
