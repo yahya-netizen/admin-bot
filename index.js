@@ -25,13 +25,19 @@ const getGroups = () => managedGroups;
 //untuk termux server
 const client = new Client({
     puppeteer: {
-        executablePath: '/data/data/com.termux/files/usr/bin/chromium-browser',
+        executablePath: '/data/data/com.termux/files/usr/bin/chromium', 
         args: [
             '--no-sandbox',
-            '--disable-setuid-sandbox'
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process', 
+            '--disable-gpu'
         ]
     }
-    // (Jika ada pengaturan lain sebelumnya seperti authStrategy, biarkan saja)
+    // ... (pengaturan lain biarkan seperti semula)
 });
 
 //untuk vps
