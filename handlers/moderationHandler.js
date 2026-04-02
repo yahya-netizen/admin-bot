@@ -147,10 +147,3 @@ function getMemberWarnings(groupId, userId) {
 }
 
 module.exports = { handleMessage, resetMemberWarnings, getMemberWarnings };
-mber tertentu
- */
-function getMemberWarnings(groupId, userId) {
-  return getWarningCount(warnings, groupId, userId);
-}
-
-module.exports = { handleMessage, resetMemberWarnings, getMemberWarnings };
