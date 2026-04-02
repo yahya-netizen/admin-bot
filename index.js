@@ -23,7 +23,16 @@ const getGroups = () => managedGroups;
 
 // ─── Inisialisasi Client WhatsApp ───────────────────────────
 //untuk termux server
+const client = new Client({
     puppeteer: {
+        executablePath: '/data/data/com.termux/files/usr/bin/chromium-browser',
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage'
+        ]
+    }
+});
 
 
 //untuk vps
