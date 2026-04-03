@@ -99,7 +99,8 @@ Harap patuhi peraturan grup. Terima kasih. 🙏
 *— ${config.BOT_NAME}*
 `.trim();
 
-      await chat.sendMessage(warnMsg, { mentions: [contact] });
+      await chat.sendMessage(warnMsg, { mentions: [senderId] });
+      
 
     } else {
       // Pelanggaran ke-4 → KICK

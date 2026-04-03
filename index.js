@@ -5,7 +5,7 @@
 
 require('dotenv').config();
 
-const { Client }  = require('whatsapp-web.js'); // [FIX #6] Hapus LocalAuth yang tidak dipakai
+const { Client }  = require('whatsapp-web.js'); // [FIenyX #6] Hapus LocalAuth yang tidak dipakai
 const qrcode = require('qrcode-terminal');
 const cron   = require('node-cron');
 
@@ -22,7 +22,11 @@ const getGroups = () => managedGroups;
 
 // ─── Inisialisasi Client WhatsApp ───────────────────────────
 // Untuk Termux
+// index.js — ganti bagian client Termux
+const { Client, LocalAuth } = require('whatsapp-web.js');
+
 const client = new Client({
+  authStrategy: new LocalAuth({ clientId: 'safety-bot' }), // ← tambah ini
   puppeteer: {
     executablePath: '/data/data/com.termux/files/usr/bin/chromium-browser',
     args: [
