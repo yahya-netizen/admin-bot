@@ -230,79 +230,47 @@ client.on('group_leave', async (notification) => {
 // ─── Event: Pesan Masuk ──────────────────────────────────────
 client.on('message', async (message) => {
   const senderId = message.author || message.from;
+  const senderNo = senderId.split('@')[0];
   const body     = (message.body || '').trim().toLowerCase();
-  const isOwner  = senderId === config.OWNER_NUMBER + '@c.us';
+  const isOwner  = senderNo === config.OWNER_NUMBER;
+  const chat     = await message.getChat();
 
-  // ── Perintah bot-bangun & bot-tidur (Grup/DM) ──────────────
-  if (body === 'bot-bangun' || body === 'bot-tidur') {
-    let canToggle = isOwner;
-
-    // Jika di grup, cek apakah pengirim adalah admin
-    const chat = await message.getChat();
-    if (chat.isGroup) {
-      const participant = chat.participants?.find(p => p.id._serialized === senderId);
-      if (participant?.isAdmin) canToggle = true;
-    }
-
-    if (canToggle) {
-      const isActivating = body === 'bot-bangun';
-      saveStatus(isActivating);
-      const statusMsg = isActivating
-        ? '☀️ *Bot Bangun!* Bot kembali aktif memantau grup. 🤖✅'
-        : '🌙 *Bot Tidur.* Bot dinonaktifkan sementara. 🤖💤';
-      await message.reply(statusMsg);
+  // ── Perintah Umum (!help) ────────────────────────────────
+  if (body === '!help') {
+    if (chat.isGroup || isOwner) {
+      let helpMsg = `📋 *Menu ${config.BOT_NAME}*\n\n` +
+                    `*!status*    — Cek status aktif bot\n` +
+                    `*!apistats*  — Penggunaan AI hari ini\n`;
+      
+      if (isOwner) {
+        helpMsg += `\n👑 *Owner Only:*\n` +
+                   `*bot-bangun*  — Aktifkan bot\n` +
+                   `*bot-tidur*   — Matikan bot\n` +
+                   `*!groups*      — Daftar grup\n` +
+                   `*!reset <id> <no>* — Reset warn\n` +
+                   `*!lock/unlock <id>* — Kontrol grup\n`;
+      }
+      
+      helpMsg += `\n_Ketik perintah sesuai daftar di atas._`;
+      await message.reply(helpMsg);
       return;
     }
   }
 
-  // ── Perintah Owner (DM langsung ke bot) ─────────────────
-  if (senderId === config.OWNER_NUMBER + '@c.us' && !message.isGroupMsg && !message.from.endsWith('@g.us')) {
-    await handleOwnerCommand(message);
-    return;
-  }
-
-  // ── Moderasi Pesan Grup ──────────────────────────────────
-  const chat = await message.getChat();
-  if (chat.isGroup) {
-    await handleMessage(client, message);
-  }
-});
-
-// ─── Perintah Owner via DM ───────────────────────────────────
-async function handleOwnerCommand(message) {
-  const body  = message.body?.trim() || '';
-  const lower = body.toLowerCase();
-
-  if (lower === '!help') {
-    await message.reply(
-      `📋 *Daftar Perintah ${config.BOT_NAME}*\n\n` +
-      `*bot-bangun*           — Aktifkan moderasi bot\n` +
-      `*bot-tidur*            — Nonaktifkan moderasi bot\n` +
-      `*!status*               — Lihat status bot & grup\n` +
-      `*!apistats*             — Pantau penggunaan Grok AI hari ini\n` +
-      `*!groups*               — Daftar grup yang dikelola\n` +
-      `*!warn <groupId> <no>*  — Lihat peringatan member\n` +
-      `*!reset <groupId> <no>* — Reset peringatan member\n` +
-      `*!lock <groupId>*       — Kunci grup manual\n` +
-      `*!unlock <groupId>*     — Buka grup manual\n\n` +
-      `_Format no: 628xxx (tanpa @c.us)_`
-    );
-    return;
-  }
-
-  if (lower === '!status') {
+  // ── Perintah Umum (!status) ────────────────────────────────
+  if (body === '!status') {
     const { isActive } = loadStatus();
     await message.reply(
       `✅ *${config.BOT_NAME} Status*\n\n` +
       `🕐 Waktu   : ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}\n` +
-      `📊 Grup    : ${managedGroups.length}\n` +
       `🤖 Moderasi: ${isActive ? 'Aktif (Bangun) ✅' : 'Mati (Tidur) 💤'}\n` +
       `🤖 Versi   : 1.0.0`
     );
     return;
   }
 
-  if (lower === '!apistats') {
+  // ── Perintah Umum (!apistats) ─────────────────────────────
+  if (body === '!apistats') {
     const stats = getUsageStats();
     const pct   = Math.round((stats.used / stats.cap) * 100);
     const bar   = '█'.repeat(Math.round(pct/10)) + '░'.repeat(10 - Math.round(pct/10));
@@ -318,57 +286,76 @@ async function handleOwnerCommand(message) {
     return;
   }
 
-  if (lower === '!groups') {
-    const list = managedGroups.length
-      ? managedGroups.map((g, i) => `${i + 1}. ${g}`).join('\n')
-      : 'Tidak ada grup.';
-    await message.reply(`📋 *Grup yang dikelola:*\n\n${list}`);
-    return;
-  }
+  // ── Perintah bot-bangun & bot-tidur (Grup/DM) ──────────────
+  if (body === 'bot-bangun' || body === 'bot-tidur') {
+    let canToggle = isOwner;
 
-  const parts = body.split(' ');
-
-  if (lower.startsWith('!warn ') && parts.length >= 3) {
-    const groupId = parts[1];
-    const userId  = parts[2] + '@c.us';
-    const count   = getMemberWarnings(groupId, userId);
-    await message.reply(`⚠️ Peringatan *${parts[2]}* di grup\n${groupId}\n\nJumlah: *${count}/${config.MAX_WARNINGS}*`);
-    return;
-  }
-
-  if (lower.startsWith('!reset ') && parts.length >= 3) {
-    const groupId = parts[1];
-    const userId  = parts[2] + '@c.us';
-    resetMemberWarnings(groupId, userId);
-    await message.reply(`✅ Peringatan untuk *${parts[2]}* berhasil direset.`);
-    return;
-  }
-
-  if (lower.startsWith('!lock ') && parts.length >= 2) {
-    try {
-      const chat = await client.getChatById(parts[1]);
-      await chat.setMessagesAdminsOnly(true);
-      await message.reply('✅ Grup berhasil dikunci.');
-    } catch (e) {
-      await message.reply(`❌ Gagal mengunci grup: ${e.message}`);
+    // Jika di grup, cek apakah pengirim adalah admin
+    if (chat.isGroup) {
+      const participant = chat.participants?.find(p => 
+        p.id._serialized === senderId || p.id.user === senderNo
+      );
+      if (participant?.isAdmin || participant?.isSuperAdmin) canToggle = true;
     }
-    return;
-  }
 
-  if (lower.startsWith('!unlock ') && parts.length >= 2) {
-    try {
-      const chat = await client.getChatById(parts[1]);
-      await chat.setMessagesAdminsOnly(false);
-      await message.reply('✅ Grup berhasil dibuka.');
-    } catch (e) {
-      await message.reply(`❌ Gagal membuka grup: ${e.message}`);
+    if (canToggle) {
+      const isActivating = body === 'bot-bangun';
+      saveStatus(isActivating);
+      const statusMsg = isActivating
+        ? '☀️ *Bot Bangun!* Bot kembali aktif memantau grup. 🤖✅'
+        : '🌙 *Bot Tidur.* Bot dinonaktifkan sementara. 🤖💤';
+      await message.reply(statusMsg);
+      return;
     }
-    return;
   }
 
-  // Perintah tidak dikenal
-  await message.reply(`❓ Perintah tidak dikenal.\nKetik *!help* untuk daftar perintah.`);
-}
+  // ── Perintah Khusus Owner (DM & Grup) ───────────────────
+  if (isOwner) {
+    if (body === '!groups') {
+      const list = managedGroups.length
+        ? managedGroups.map((g, i) => `${i + 1}. ${g}`).join('\n')
+        : 'Tidak ada grup.';
+      await message.reply(`📋 *Grup yang dikelola:*\n\n${list}`);
+      return;
+    }
+
+    const parts = body.split(' ');
+    if (body.startsWith('!reset ') && parts.length >= 3) {
+      const groupId = parts[1];
+      const userId  = parts[2] + '@c.us';
+      resetMemberWarnings(groupId, userId);
+      await message.reply(`✅ Peringatan untuk *${parts[2]}* berhasil direset.`);
+      return;
+    }
+
+    if (body.startsWith('!lock ') && parts.length >= 2) {
+      try {
+        const chatLock = await client.getChatById(parts[1]);
+        await chatLock.setMessagesAdminsOnly(true);
+        await message.reply('✅ Grup berhasil dikunci.');
+      } catch (e) {
+        await message.reply(`❌ Gagal mengunci grup: ${e.message}`);
+      }
+      return;
+    }
+
+    if (body.startsWith('!unlock ') && parts.length >= 2) {
+      try {
+        const chatUnlock = await client.getChatById(parts[1]);
+        await chatUnlock.setMessagesAdminsOnly(false);
+        await message.reply('✅ Grup berhasil dibuka.');
+      } catch (e) {
+        await message.reply(`❌ Gagal membuka grup: ${e.message}`);
+      }
+      return;
+    }
+  }
+
+  // ── Moderasi Pesan Grup ──────────────────────────────────
+  if (chat.isGroup) {
+    await handleMessage(client, message);
+  }
+});
 
 // ─── Auth Failure ────────────────────────────────────────────
 client.on('auth_failure', (msg) => {
