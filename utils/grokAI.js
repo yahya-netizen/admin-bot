@@ -154,20 +154,23 @@ async function checkViolation(messageText) {
 
   // ── 4. Panggil Grok API ─────────────────────────────────
   try {
+    if (!process.env.GROK_API_KEY || process.env.GROK_API_KEY.includes('xxx')) {
+      throw new Error('GROK_API_KEY belum dikonfigurasi di .env');
+    }
+
     dailyCallCount++;
     console.log(`[GrokAI] API call #${dailyCallCount}/${DAILY_API_CAP}: "${normalized.substring(0,50)}"`);
 
     const response = await axios.post(
       GROK_API_URL,
       {
-        // grok-beta = model stabil xAI
-        model:      'grok-beta',
-        max_tokens: 60,        // JSON pendek cukup {"is_violation":x,"category":"x","confidence":x}
-        temperature: 0,        // Deterministik = konsisten + hemat
+        // Gunakan model dari config (default: grok-3-mini)
+        model:      config.GROK_MODEL || 'grok-beta',
+        max_tokens: 60,
+        temperature: 0,
         messages: [
           {
             role: 'system',
-            // Prompt sesingkat mungkin untuk hemat input token
             content:
               'Anda adalah moderator grup WhatsApp Indonesia yang sangat ketat dan akurat. ' +
               'Tugas: Identifikasi (rude/racist/sara). ' +
@@ -177,14 +180,13 @@ async function checkViolation(messageText) {
           },
           {
             role: 'user',
-            // Pesan sudah dipotong 120 karakter di normalizeText()
             content: normalized
           }
         ]
       },
       {
         headers: {
-          Authorization:  `Bearer ${process.env.GROK_API_KEY}`,
+          Authorization:  `Bearer ${process.env.GROK_API_KEY.trim()}`,
           'Content-Type': 'application/json'
         },
         timeout: 12000
@@ -213,6 +215,9 @@ async function checkViolation(messageText) {
     return result;
 
   } catch (error) {
+    if (error.response) {
+      console.error('[GrokAI] Error Details:', JSON.stringify(error.response.data, null, 2));
+    }
     console.error('[GrokAI] Error:', error.message);
     dailyCallCount = Math.max(0, dailyCallCount - 1); // Rollback jika gagal
     return { is_violation: false, category: 'none', confidence: 0, reason: 'API error' };

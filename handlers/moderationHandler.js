@@ -48,9 +48,11 @@ async function handleMessage(client, message) {
     const body = (message.body || '').trim();
     if (!body || body.length < 3) return;
 
-    // Abaikan pesan dari admin grup (opsional — hapus blok ini jika admin juga ingin dimoderate)
-    const participant = chat.participants?.find(p => p.id._serialized === senderId);
-    if (participant?.isAdmin) return;
+    // Abaikan pesan dari admin grup
+    const participant = chat.participants?.find(p => 
+      p.id._serialized === senderId || p.id.user === senderId.split('@')[0]
+    );
+    if (participant?.isAdmin || participant?.isSuperAdmin) return;
 
     // ── Validasi ke Grok AI ──────────────────────────────────
     console.log(`[Moderation] Memeriksa pesan dari ${senderId}: "${body.substring(0, 60)}..."`);
