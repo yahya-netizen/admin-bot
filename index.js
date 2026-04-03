@@ -5,45 +5,45 @@
 
 require('dotenv').config();
 
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client }  = require('whatsapp-web.js'); // [FIX #6] Hapus LocalAuth yang tidak dipakai
 const qrcode = require('qrcode-terminal');
 const cron   = require('node-cron');
 
-const config             = require('./config');
-const { handleNewMember }       = require('./handlers/welcomeHandler');
+const config                     = require('./config');
+const { handleNewMember }        = require('./handlers/welcomeHandler');
 const { handleMessage, resetMemberWarnings, getMemberWarnings } = require('./handlers/moderationHandler');
-const { startPrayerScheduler }  = require('./handlers/prayerHandler');
+const { startPrayerScheduler }   = require('./handlers/prayerHandler');
 const { loadStatus, saveStatus } = require('./utils/storage');
-const { getUsageStats }         = require('./utils/grokAI');
+const { getUsageStats }          = require('./utils/grokAI');
 
 // ─── Daftar grup yang dikelola bot ─────────────────────────
-let managedGroups = ['MAHASISWA MUSLIM UNSIL 2026','es bot' ];
-
+let managedGroups = [];
 const getGroups = () => managedGroups;
 
 // ─── Inisialisasi Client WhatsApp ───────────────────────────
-//untuk termux server
+// Untuk Termux
 const client = new Client({
-    puppeteer: {
-        executablePath: '/data/data/com.termux/files/usr/bin/chromium-browser',
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-software-rasterizer',
-            '--disable-extensions',
-            '--single-process'
-        ]
-    }
+  puppeteer: {
+    executablePath: '/data/data/com.termux/files/usr/bin/chromium-browser',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-extensions',
+      '--single-process'
+    ]
+  }
 });
 
-
-//untuk vps
-/*const client = new Client({
+// Untuk VPS (uncomment jika pindah ke VPS, comment blok Termux di atas)
+/*
+const { LocalAuth } = require('whatsapp-web.js');
+const client = new Client({
   authStrategy: new LocalAuth({ clientId: 'safety-bot' }),
   puppeteer: {
     headless: true,
@@ -58,7 +58,8 @@ const client = new Client({
       '--disable-gpu'
     ]
   }
-});*/
+});
+*/
 
 // ─── QR Code ────────────────────────────────────────────────
 client.on('qr', (qr) => {
@@ -78,6 +79,8 @@ client.on('authenticated', () => {
 
 // ─── Bot Siap ────────────────────────────────────────────────
 client.on('ready', async () => {
+  reconnectCount = 0; // [FIX #4] Reset counter reconnect saat berhasil ready
+
   console.log('\n' + '═'.repeat(55));
   console.log(`  🤖  ${config.BOT_NAME} Aktif!`);
   console.log(`  📅  ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`);
@@ -168,22 +171,23 @@ function startGroupOperationalScheduler() {
   console.log('[Scheduler] Jam operasional & refresh jadwal aktif.\n');
 }
 
-/**
- * Cek apakah jam sekarang masuk jam tidur grup
- */
+// ─── Cek Jam Operasional Saat Bot Pertama Nyala ─────────────
 async function checkCurrentOperationalHours() {
-  const now   = new Date();
-  const hour  = now.getHours();
-  
-  // Jika jam sekarang >= 22 ATAU jam < 3 (Waktu Tidur)
+  // [FIX #3] Paksa timezone WIB agar tidak salah di Termux
+  const hour = parseInt(
+    new Date().toLocaleString('en-US', {
+      timeZone: 'Asia/Jakarta',
+      hour: 'numeric',
+      hour12: false
+    })
+  );
+
   if (hour >= config.CLOSE_HOUR || hour < config.OPEN_HOUR) {
     console.log(`[Operational] Jam sekarang ${hour}:00, otomatis mengunci grup (Waktu Tidur).`);
     for (const groupId of managedGroups) {
       try {
         const chat = await client.getChatById(groupId);
         await chat.setMessagesAdminsOnly(true);
-        
-        // Kirim keterangan agar anggota tahu kenapa grup terkunci
         await chat.sendMessage(
           `🌙 *INFO OTOMATIS — GRUP TETAP DITUTUP* 💤\n\n` +
           `Bot baru saja aktif. Karena saat ini sudah memasuki waktu istirahat (pukul ${hour}.00 WIB), maka grup *tetap dikunci* sesuai jadwal operasional.\n\n` +
@@ -201,159 +205,187 @@ async function checkCurrentOperationalHours() {
 
 // ─── Event: Anggota Baru Masuk ───────────────────────────────
 client.on('group_join', async (notification) => {
-  const ids = notification.recipientIds || [];
-
-  // Jika bot sendiri yang baru diundang → tambahkan ke daftar kelola
-  if (ids.includes(config.BOT_NUMBER + '@c.us')) {
-    if (!managedGroups.includes(notification.chatId)) {
-      managedGroups.push(notification.chatId);
-      console.log(`[Group] Bot ditambahkan ke grup baru: ${notification.chatId}`);
-      await startPrayerScheduler(client, getGroups); // Refresh dengan grup baru
+  try {
+    const ids = notification.recipientIds || [];
+    if (ids.includes(config.BOT_NUMBER + '@c.us')) {
+      if (!managedGroups.includes(notification.chatId)) {
+        managedGroups.push(notification.chatId);
+        console.log(`[Group] Bot ditambahkan ke grup baru: ${notification.chatId}`);
+        await startPrayerScheduler(client, getGroups);
+      }
     }
+    await handleNewMember(client, notification);
+  } catch (e) {
+    console.error('[group_join] Error:', e.message);
   }
-
-  // Sambut anggota baru (fitur ini tetap jalan meskipun moderasi mati)
-  await handleNewMember(client, notification);
 });
 
 // ─── Event: Anggota Keluar ───────────────────────────────────
 client.on('group_leave', async (notification) => {
-  const ids = notification.recipientIds || [];
-
-  // Jika bot yang dikeluarkan → hapus dari daftar kelola
-  if (ids.includes(config.BOT_NUMBER + '@c.us')) {
-    managedGroups = managedGroups.filter(id => id !== notification.chatId);
-    console.log(`[Group] Bot dikeluarkan dari grup: ${notification.chatId}`);
+  try {
+    const ids = notification.recipientIds || [];
+    if (ids.includes(config.BOT_NUMBER + '@c.us')) {
+      managedGroups = managedGroups.filter(id => id !== notification.chatId);
+      console.log(`[Group] Bot dikeluarkan dari grup: ${notification.chatId}`);
+    }
+  } catch (e) {
+    console.error('[group_leave] Error:', e.message);
   }
 });
 
 // ─── Event: Pesan Masuk ──────────────────────────────────────
 client.on('message', async (message) => {
-  const senderId = message.author || message.from;
-  const senderNo = senderId.split('@')[0];
-  const body     = (message.body || '').trim().toLowerCase();
-  const isOwner  = senderNo === config.OWNER_NUMBER;
-  const chat     = await message.getChat();
+  try {
+    // [FIX #2] Abaikan pesan yang dikirim oleh bot sendiri
+    if (message.fromMe) return;
 
-  // ── Perintah Umum (!help) ────────────────────────────────
-  if (body === '!help') {
-    if (chat.isGroup || isOwner) {
-      let helpMsg = `📋 *Menu ${config.BOT_NAME}*\n\n` +
-                    `*!status*    — Cek status aktif bot\n` +
-                    `*!apistats*  — Penggunaan AI hari ini\n`;
-      
-      if (isOwner) {
-        helpMsg += `\n👑 *Owner Only:*\n` +
-                   `*bot-bangun*  — Aktifkan bot\n` +
-                   `*bot-tidur*   — Matikan bot\n` +
-                   `*!groups*      — Daftar grup\n` +
-                   `*!reset <id> <no>* — Reset warn\n` +
-                   `*!lock/unlock <id>* — Kontrol grup\n`;
+    // [FIX #1] Dapatkan chat lebih dulu untuk bisa bedakan DM vs Grup
+    const chat = await message.getChat();
+
+    // [FIX #1] Deteksi senderId dengan benar:
+    // - Grup : message.author = JID pengirim, message.from = JID grup
+    // - DM   : message.author = null/undefined, message.from = JID pengirim
+    const senderId = chat.isGroup
+      ? (message.author || message.from)
+      : message.from;
+
+    // Antisipasi senderId kosong (pesan sistem, broadcast, dll)
+    if (!senderId) return;
+
+    const senderNo = senderId.replace('@c.us', '').replace('@s.whatsapp.net', '');
+    const body     = (message.body || '').trim().toLowerCase();
+    const isOwner  = senderNo === config.OWNER_NUMBER;
+
+    // ── Perintah Umum (!help) ─────────────────────────────
+    if (body === '!help') {
+      if (chat.isGroup || isOwner) {
+        let helpMsg =
+          `📋 *Menu ${config.BOT_NAME}*\n\n` +
+          `*!status*    — Cek status aktif bot\n` +
+          `*!apistats*  — Penggunaan AI hari ini\n`;
+
+        if (isOwner) {
+          helpMsg +=
+            `\n👑 *Owner Only:*\n` +
+            `*bot-bangun*        — Aktifkan bot\n` +
+            `*bot-tidur*         — Matikan bot\n` +
+            `*!groups*           — Daftar grup\n` +
+            `*!reset <id> <no>*  — Reset warn\n` +
+            `*!lock <id>*        — Kunci grup\n` +
+            `*!unlock <id>*      — Buka grup\n`;
+        }
+
+        helpMsg += `\n_Ketik perintah sesuai daftar di atas._`;
+        await message.reply(helpMsg);
+        return;
       }
-      
-      helpMsg += `\n_Ketik perintah sesuai daftar di atas._`;
-      await message.reply(helpMsg);
-      return;
     }
-  }
 
-  // ── Perintah Umum (!status) ────────────────────────────────
-  if (body === '!status') {
-    const { isActive } = loadStatus();
-    await message.reply(
-      `✅ *${config.BOT_NAME} Status*\n\n` +
-      `🕐 Waktu   : ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}\n` +
-      `🤖 Moderasi: ${isActive ? 'Aktif (Bangun) ✅' : 'Mati (Tidur) 💤'}\n` +
-      `🤖 Versi   : 1.0.0`
-    );
-    return;
-  }
-
-  // ── Perintah Umum (!apistats) ─────────────────────────────
-  if (body === '!apistats') {
-    const stats = getUsageStats();
-    const pct   = Math.round((stats.used / stats.cap) * 100);
-    const bar   = '█'.repeat(Math.round(pct/10)) + '░'.repeat(10 - Math.round(pct/10));
-    await message.reply(
-      `📊 *Grok AI Usage Hari Ini*\n\n` +
-      `Model  : grok-3-mini (free tier)\n` +
-      `Tanggal: ${stats.date}\n` +
-      `${bar} ${pct}%\n` +
-      `Pakai  : *${stats.used}* / ${stats.cap} panggilan\n` +
-      `Sisa   : *${stats.cap - stats.used}* panggilan\n\n` +
-      `_Counter reset otomatis tiap tengah malam._`
-    );
-    return;
-  }
-
-  // ── Perintah bot-bangun & bot-tidur (Grup/DM) ──────────────
-  if (body === 'bot-bangun' || body === 'bot-tidur') {
-    let canToggle = isOwner;
-
-    // Jika di grup dan bukan owner, cek apakah pengirim adalah admin
-    if (!canToggle && chat.isGroup) {
-      const participant = chat.participants?.find(p => 
-        p.id._serialized === senderId || p.id.user === senderNo
+    // ── Perintah Umum (!status) ───────────────────────────
+    if (body === '!status') {
+      const { isActive } = loadStatus();
+      await message.reply(
+        `✅ *${config.BOT_NAME} Status*\n\n` +
+        `🕐 Waktu   : ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}\n` +
+        `🤖 Moderasi: ${isActive ? 'Aktif (Bangun) ✅' : 'Mati (Tidur) 💤'}\n` +
+        `🤖 Versi   : 1.0.0`
       );
-      if (participant?.isAdmin || participant?.isSuperAdmin) canToggle = true;
-    }
-
-    if (canToggle) {
-      const isActivating = body === 'bot-bangun';
-      saveStatus(isActivating);
-      const statusMsg = isActivating
-        ? '☀️ *Bot Bangun!* Bot kembali aktif memantau grup. 🤖✅'
-        : '🌙 *Bot Tidur.* Bot dinonaktifkan sementara. 🤖💤';
-      await message.reply(statusMsg);
-      return;
-    }
-  }
-
-  // ── Perintah Khusus Owner (DM & Grup) ───────────────────
-  if (isOwner) {
-    if (body === '!groups') {
-      const list = managedGroups.length
-        ? managedGroups.map((g, i) => `${i + 1}. ${g}`).join('\n')
-        : 'Tidak ada grup.';
-      await message.reply(`📋 *Grup yang dikelola:*\n\n${list}`);
       return;
     }
 
-    const parts = body.split(' ');
-    if (body.startsWith('!reset ') && parts.length >= 3) {
-      const groupId = parts[1];
-      const userId  = parts[2] + '@c.us';
-      resetMemberWarnings(groupId, userId);
-      await message.reply(`✅ Peringatan untuk *${parts[2]}* berhasil direset.`);
+    // ── Perintah Umum (!apistats) ─────────────────────────
+    if (body === '!apistats') {
+      const stats = getUsageStats();
+      const pct   = Math.round((stats.used / stats.cap) * 100);
+      const bar   = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
+      await message.reply(
+        `📊 *Grok AI Usage Hari Ini*\n\n` +
+        `Model  : grok-3-mini (free tier)\n` +
+        `Tanggal: ${stats.date}\n` +
+        `${bar} ${pct}%\n` +
+        `Pakai  : *${stats.used}* / ${stats.cap} panggilan\n` +
+        `Sisa   : *${stats.cap - stats.used}* panggilan\n\n` +
+        `_Counter reset otomatis tiap tengah malam._`
+      );
       return;
     }
 
-    if (body.startsWith('!lock ') && parts.length >= 2) {
-      try {
-        const chatLock = await client.getChatById(parts[1]);
-        await chatLock.setMessagesAdminsOnly(true);
-        await message.reply('✅ Grup berhasil dikunci.');
-      } catch (e) {
-        await message.reply(`❌ Gagal mengunci grup: ${e.message}`);
+    // ── Perintah bot-bangun & bot-tidur (Owner/Admin Grup) ─
+    if (body === 'bot-bangun' || body === 'bot-tidur') {
+      let canToggle = isOwner;
+
+      // Jika di grup dan bukan owner, cek apakah pengirim adalah admin grup
+      if (!canToggle && chat.isGroup) {
+        const participant = chat.participants?.find(p =>
+          p.id._serialized === senderId ||
+          p.id.user === senderNo
+        );
+        if (participant?.isAdmin || participant?.isSuperAdmin) canToggle = true;
+      }
+
+      if (canToggle) {
+        const isActivating = body === 'bot-bangun';
+        saveStatus(isActivating);
+        await message.reply(
+          isActivating
+            ? '☀️ *Bot Bangun!* Bot kembali aktif memantau grup. 🤖✅'
+            : '🌙 *Bot Tidur.* Bot dinonaktifkan sementara. 🤖💤'
+        );
       }
       return;
     }
 
-    if (body.startsWith('!unlock ') && parts.length >= 2) {
-      try {
-        const chatUnlock = await client.getChatById(parts[1]);
-        await chatUnlock.setMessagesAdminsOnly(false);
-        await message.reply('✅ Grup berhasil dibuka.');
-      } catch (e) {
-        await message.reply(`❌ Gagal membuka grup: ${e.message}`);
+    // ── Perintah Khusus Owner (DM & Grup) ────────────────
+    if (isOwner) {
+      if (body === '!groups') {
+        const list = managedGroups.length
+          ? managedGroups.map((g, i) => `${i + 1}. ${g}`).join('\n')
+          : 'Tidak ada grup.';
+        await message.reply(`📋 *Grup yang dikelola:*\n\n${list}`);
+        return;
       }
-      return;
-    }
-  }
 
-  // ── Moderasi Pesan Grup ──────────────────────────────────
-  if (chat.isGroup) {
-    await handleMessage(client, message);
+      const parts = body.split(' ');
+
+      if (body.startsWith('!reset ') && parts.length >= 3) {
+        const groupId = parts[1];
+        const userId  = parts[2] + '@c.us';
+        resetMemberWarnings(groupId, userId);
+        await message.reply(`✅ Peringatan untuk *${parts[2]}* berhasil direset.`);
+        return;
+      }
+
+      if (body.startsWith('!lock ') && parts.length >= 2) {
+        try {
+          const chatLock = await client.getChatById(parts[1]);
+          await chatLock.setMessagesAdminsOnly(true);
+          await message.reply('✅ Grup berhasil dikunci.');
+        } catch (e) {
+          await message.reply(`❌ Gagal mengunci grup: ${e.message}`);
+        }
+        return;
+      }
+
+      if (body.startsWith('!unlock ') && parts.length >= 2) {
+        try {
+          const chatUnlock = await client.getChatById(parts[1]);
+          await chatUnlock.setMessagesAdminsOnly(false);
+          await message.reply('✅ Grup berhasil dibuka.');
+        } catch (e) {
+          await message.reply(`❌ Gagal membuka grup: ${e.message}`);
+        }
+        return;
+      }
+    }
+
+    // ── Moderasi Pesan Grup ───────────────────────────────
+    if (chat.isGroup) {
+      await handleMessage(client, message);
+    }
+
+  } catch (err) {
+    // [FIX #5] Catch global agar satu pesan error tidak crash semua handler
+    console.error('[Message Handler] Error:', err.message);
   }
 });
 
@@ -364,10 +396,18 @@ client.on('auth_failure', (msg) => {
 });
 
 // ─── Koneksi Terputus ────────────────────────────────────────
+// [FIX #4] Batasi reconnect maksimal 5x agar tidak loop selamanya
+let reconnectCount = 0;
 client.on('disconnected', (reason) => {
   console.warn('⚠️  Bot terputus:', reason);
-  console.log('🔄  Menghubungkan kembali dalam 5 detik...');
-  setTimeout(() => client.initialize(), 5000);
+  if (reconnectCount < 5) {
+    reconnectCount++;
+    console.log(`🔄  Reconnect ke-${reconnectCount}/5 dalam 5 detik...`);
+    setTimeout(() => client.initialize(), 5000);
+  } else {
+    console.error('❌ Gagal reconnect setelah 5x percobaan. Bot berhenti.');
+    process.exit(1);
+  }
 });
 
 // ─── Mulai Bot ───────────────────────────────────────────────
