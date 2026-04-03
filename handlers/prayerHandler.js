@@ -78,15 +78,47 @@ async function startPrayerScheduler(client, getGroups) {
 
   const prayerKeys = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
+  const isFriday = new Date().getDay() === 5;
+
   for (const key of prayerKeys) {
     const timeStr = timings[key];
-    const info    = config.PRAYER_MESSAGES[key];
-    if (!timeStr || !info) continue;
+    let info      = { ...config.PRAYER_MESSAGES[key] };
 
-    console.log(`[Prayer] ${info.name}: ${timeStr} WIB`);
+    // Penyesuaian khusus Shalat Jumat
+    const isFridayJumat = isFriday && key === 'Dhuhr';
+    if (isFridayJumat) {
+      info.name = 'Jumat';
+      info.msg  = 'Siap-siap untuk shalat Jumat! Jangan lupa potong kuku, mandi sunnah, dan datang lebih awal ke masjid. 🕌✨';
+    }
+
+    const beforeMinutes = config.BEFORE_PRAYER;
+    const afterMinutes  = isFridayJumat ? 30 : config.AFTER_PRAYER;
+
+    console.log(`[Prayer] ${info.name}: ${timeStr} WIB (${isFridayJumat ? 'Jadwal Jumat' : 'Reguler'})`);
+
+    // ── 0. KHUSUS JUMAT: Pengingat 1 Jam Sebelum Adzan ────────
+    if (isFridayJumat) {
+      scheduleOnce(msUntil(timeStr, -60), async () => {
+        const groups = getGroups();
+        console.log(`[Prayer] Jumat: Kirim pengingat 1 jam sebelum`);
+        for (const groupId of groups) {
+          try {
+            const chat = await client.getChatById(groupId);
+            await chat.sendMessage(
+              `📢 *PENGINGAT SHALAT JUMAT* 🕌\n\n` +
+              `Sekitar *1 jam lagi* adzan Shalat Jumat akan berkumandang.\n` +
+              `Yuk mulai persiapan diri, mandi sunnah, dan bersiap menuju masjid lebih awal. ✨\n\n` +
+              `*— ${config.BOT_NAME}*`
+            );
+          } catch (e) {
+            console.error(`[Prayer] Jumat-60min error:`, e.message);
+          }
+        }
+      });
+    }
 
     // ── 1. 5 menit sebelum adzan → reminder + kunci grup ─────
-    scheduleOnce(msUntil(timeStr, -config.BEFORE_PRAYER), async () => {
+    scheduleOnce(msUntil(timeStr, -beforeMinutes), async () => {
       const groups = getGroups();
       console.log(`[Prayer] ${info.name}: kirim reminder & kunci ${groups.length} grup`);
 
@@ -97,10 +129,10 @@ async function startPrayerScheduler(client, getGroups) {
           const reminderMsg = `
 🕌 *Grup Dikunci Sementara — Waktu Shalat ${info.name}* 🕌
 
-Panggilan ibadah untuk shalat *${info.name}* akan segera tiba (sekitar *${config.BEFORE_PRAYER} menit* lagi).
+Panggilan ibadah untuk shalat *${info.name}* akan segera tiba (sekitar *${beforeMinutes} menit* lagi).
 Grup kami *kunci sementara* agar seluruh anggota dapat fokus menjalankan ibadah dengan tenang. 🙏
 
-Grup akan dibuka kembali sekitar *10 menit* setelah adzan berkumandang.
+Grup akan dibuka kembali sekitar *${afterMinutes} menit* setelah adzan berkumandang.
 
 *— ${config.BOT_NAME}*
 `.trim();
@@ -140,8 +172,8 @@ Semoga ibadah kita diterima Allah SWT. Aamiin 🤲
       }
     });
 
-    // ── 3. 10 menit setelah adzan → buka grup (jika masih jam operasional) ─
-    scheduleOnce(msUntil(timeStr, config.AFTER_PRAYER), async () => {
+    // ── 3. Post-Adzan → buka grup (10m reguler / 30m Jumat) ──
+    scheduleOnce(msUntil(timeStr, afterMinutes), async () => {
       const groups = getGroups();
       const nowH   = new Date().getHours();
 
