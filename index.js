@@ -290,8 +290,8 @@ client.on('message', async (message) => {
   if (body === 'bot-bangun' || body === 'bot-tidur') {
     let canToggle = isOwner;
 
-    // Jika di grup, cek apakah pengirim adalah admin
-    if (chat.isGroup) {
+    // Jika di grup dan bukan owner, cek apakah pengirim adalah admin
+    if (!canToggle && chat.isGroup) {
       const participant = chat.participants?.find(p => 
         p.id._serialized === senderId || p.id.user === senderNo
       );
